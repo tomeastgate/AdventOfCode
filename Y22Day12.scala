@@ -1,59 +1,59 @@
-package org.example
+import scala.annotation.tailrec
 
-import org.apache.spark._
-import org.apache.spark.graphx._
-import org.apache.spark.graphx.lib.ShortestPaths
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SparkSession
+case class Vertex(
+                   vertexId: Int,
+                   character: Char,
+                   isVisited: Boolean = false,
+                   distance: Long = 0
+                 )
+
+case class Edge(
+                 sourceId: Int,
+                 destinationId: Int
+               )
 
 object DayTwelve extends App {
 
 
 //  val input = "SabqponmabcryxxlaccszExkacctuvwjabdefghi"
 //  val rowLength = 8
-  val input = "abaacccccccccccccaaaaaaaccccccccccccccccccccccccccccccccccaaaaaaabaaccccccccccccccaaaaaaaaaaccccccccccccccccccccccccccccccccaaaaabaaaaacccccccccaaaaaaaaaaaaccccccccccccccccccccccccccccccccaaaaabaaaaaccccccccaaaaaaaaaaaaaacccccccccccccccccdcccccccccccccaaaaabaaaccccccccccaaaaaaaaccacacccccccccccccccccdddcccccccccccaaaaaabaaacccccccccaaaaaaaaaaccaaccccccccccccciiiiddddcccccccccccacccabcaaaccccccccaaaaaaaaaaaaaaccccccccccciiiiiijddddccccccccccccccabccaaccccccccaccaaaaaaaaaaaacccccccccciiiiiijjddddccccaacccccccabccccccccccccccaaacaaaaaaaaaaccccccciiiiippijjjddddccaaacccccccabccccccccccccccaacccccaaaaaaacccccciiiippppppjjjdddddaaaaaaccccabccccccccccccccccccccaaaaaaccccccckiiippppppqqjjjdddeeeaaaaccccabccccccccccccccccccccaaaaaaccccckkkiippppuupqqjjjjdeeeeeaacccccabccccccccccccccccccccccccaaccckkkkkkipppuuuuqqqjjjjjeeeeeacccccabccccccccccccccccccccccccccckkkkkkoppppuuuuuvqqqjjjjjkeeeecccccabcccccccccccccccccccccccccckkkkooooppppuuxuvvqqqqqqjkkkeeeeccccabccaaccaccccccccccccccccccckkkoooooopuuuuxyvvvqqqqqqkkkkeeeccccabccaaaaacccccaaccccccccccckkkoooouuuuuuuxxyyvvvvqqqqqkkkkeeccccabcaaaaacccccaaaacccccccccckkkooouuuuxxxuxxyyvvvvvvvqqqkkkeeecccabcaaaaaaaaaaaaacccccccccccjjjooottuxxxxxxxyyyyyvvvvrrrkkkeeccccabcccaaaacaaaaaaaaacaaccccccjjoootttxxxxxxxyyyyyyvvvrrkkkfffccccSbccaacccccaaaaaaaaaaaccccccjjjooottxxxxEzzzyyyyvvvrrrkkkfffccccabcccccccccaaaaaaaaaaaccccccjjjooootttxxxyyyyyvvvvrrrkkkfffcccccabcaacccccaaaaaaaaaaaccccccccjjjooottttxxyyyyywwvrrrrkkkfffcccccabaaacccccaaaaaaaaaaaaaacccccjjjjonnttxxyyyyyywwwrrlllkfffccccccabaaaaaaaaaaacaaaaaaaaaaccccccjjjnnnttxxyywwyyywwrrlllffffccccccabaaaaaaaaaaaaaaaaaaaaaaccccccjjjnntttxxwwwwwywwwrrlllfffcccccccabaaccaaaaaaaaaaaaaaacccccccccjjjnntttxwwwsswwwwwrrlllfffcccccccabaacccaaaaaaaacccaaacccccccccjjinnttttwwsssswwwsrrlllgffaccccccabccccaaaaaaccccccaaaccccccccciiinnntttsssssssssssrlllggaaccccccabccccaaaaaaaccccccccccaaccccciiinnntttsssmmssssssrlllggaaccccccabccccaacaaaacccccccaacaaaccccciinnnnnnmmmmmmmsssslllgggaaaaccccabccccccccaaacccccccaaaaacccccciiinnnnnmmmmmmmmmmllllgggaaaaccccabaaaccccccccccccccccaaaaaacccciiiinnnmmmhhhmmmmmlllgggaaaacccccabaaaaacccccccccccaaaaaaaaaccccciiiiiiihhhhhhhhmmlgggggaaaccccccabaaaaaccccaaccccaaaaaaacaacccccciiiiihhhhhhhhhhggggggcaaaccccccabaaaaccccaaaccccaaaacaaaaacccccccciiihhaaaaahhhhggggcccccccccccabaaaaaaacaaacccccaaaaaaaaaccccccccccccccaaaacccccccccccccccccaaabaacaaaaaaaaaaaccaaaaaaaaccccccccccccccccaaaccccccccccccccccaaaabcccccaaaaaaaaacccaaaaaaaccccccccccccccccaacccccccccccccccccaaaabccccccaaaaaaaaaaaaaaaaacccccccccccccccccaaacccccccccccccaaaaaaabcccccaaaaaaaaaaaaaaaaaaaaaccccccccccccccccccccccccccccccaaaaaa"
-  val rowLength = 64
+    val input = "abaacccccccccccccaaaaaaaccccccccccccccccccccccccccccccccccaaaaaaabaaccccccccccccccaaaaaaaaaaccccccccccccccccccccccccccccccccaaaaabaaaaacccccccccaaaaaaaaaaaaccccccccccccccccccccccccccccccccaaaaabaaaaaccccccccaaaaaaaaaaaaaacccccccccccccccccdcccccccccccccaaaaabaaaccccccccccaaaaaaaaccacacccccccccccccccccdddcccccccccccaaaaaabaaacccccccccaaaaaaaaaaccaaccccccccccccciiiiddddcccccccccccacccabcaaaccccccccaaaaaaaaaaaaaaccccccccccciiiiiijddddccccccccccccccabccaaccccccccaccaaaaaaaaaaaacccccccccciiiiiijjddddccccaacccccccabccccccccccccccaaacaaaaaaaaaaccccccciiiiippijjjddddccaaacccccccabccccccccccccccaacccccaaaaaaacccccciiiippppppjjjdddddaaaaaaccccabccccccccccccccccccccaaaaaaccccccckiiippppppqqjjjdddeeeaaaaccccabccccccccccccccccccccaaaaaaccccckkkiippppuupqqjjjjdeeeeeaacccccabccccccccccccccccccccccccaaccckkkkkkipppuuuuqqqjjjjjeeeeeacccccabccccccccccccccccccccccccccckkkkkkoppppuuuuuvqqqjjjjjkeeeecccccabcccccccccccccccccccccccccckkkkooooppppuuxuvvqqqqqqjkkkeeeeccccabccaaccaccccccccccccccccccckkkoooooopuuuuxyvvvqqqqqqkkkkeeeccccabccaaaaacccccaaccccccccccckkkoooouuuuuuuxxyyvvvvqqqqqkkkkeeccccabcaaaaacccccaaaacccccccccckkkooouuuuxxxuxxyyvvvvvvvqqqkkkeeecccabcaaaaaaaaaaaaacccccccccccjjjooottuxxxxxxxyyyyyvvvvrrrkkkeeccccabcccaaaacaaaaaaaaacaaccccccjjoootttxxxxxxxyyyyyyvvvrrkkkfffccccSbccaacccccaaaaaaaaaaaccccccjjjooottxxxxEzzzyyyyvvvrrrkkkfffccccabcccccccccaaaaaaaaaaaccccccjjjooootttxxxyyyyyvvvvrrrkkkfffcccccabcaacccccaaaaaaaaaaaccccccccjjjooottttxxyyyyywwvrrrrkkkfffcccccabaaacccccaaaaaaaaaaaaaacccccjjjjonnttxxyyyyyywwwrrlllkfffccccccabaaaaaaaaaaacaaaaaaaaaaccccccjjjnnnttxxyywwyyywwrrlllffffccccccabaaaaaaaaaaaaaaaaaaaaaaccccccjjjnntttxxwwwwwywwwrrlllfffcccccccabaaccaaaaaaaaaaaaaaacccccccccjjjnntttxwwwsswwwwwrrlllfffcccccccabaacccaaaaaaaacccaaacccccccccjjinnttttwwsssswwwsrrlllgffaccccccabccccaaaaaaccccccaaaccccccccciiinnntttsssssssssssrlllggaaccccccabccccaaaaaaaccccccccccaaccccciiinnntttsssmmssssssrlllggaaccccccabccccaacaaaacccccccaacaaaccccciinnnnnnmmmmmmmsssslllgggaaaaccccabccccccccaaacccccccaaaaacccccciiinnnnnmmmmmmmmmmllllgggaaaaccccabaaaccccccccccccccccaaaaaacccciiiinnnmmmhhhmmmmmlllgggaaaacccccabaaaaacccccccccccaaaaaaaaaccccciiiiiiihhhhhhhhmmlgggggaaaccccccabaaaaaccccaaccccaaaaaaacaacccccciiiiihhhhhhhhhhggggggcaaaccccccabaaaaccccaaaccccaaaacaaaaacccccccciiihhaaaaahhhhggggcccccccccccabaaaaaaacaaacccccaaaaaaaaaccccccccccccccaaaacccccccccccccccccaaabaacaaaaaaaaaaaccaaaaaaaaccccccccccccccccaaaccccccccccccccccaaaabcccccaaaaaaaaacccaaaaaaaccccccccccccccccaacccccccccccccccccaaaabccccccaaaaaaaaaaaaaaaaacccccccccccccccccaaacccccccccccccaaaaaaabcccccaaaaaaaaaaaaaaaaaaaaaccccccccccccccccccccccccccccccaaaaaa"
+    val rowLength = 64
 
   val maxCharacters = input.length
-  val inputChar = input.toList.zipWithIndex
-  val start = inputChar.filter(_._1 == 'S').head._2
-  val end = inputChar.filter(_._1 == 'E').head._2
+  val verticesSeq = input.toList.zipWithIndex.map(inputChar => Vertex(inputChar._2, inputChar._1))
 
-  val verticesSeq = inputChar.map(charWithIndex => (charWithIndex._2.toLong, charWithIndex._1))
   val edgesSeq = verticesSeq.flatMap{vertex =>
-    val currentVertex = vertex._1
+    val currentVertex = vertex.vertexId
     val adjacentVertices = Seq(currentVertex + 1, currentVertex - 1, currentVertex + rowLength, currentVertex - rowLength)
     val realAdjacentVertices = adjacentVertices.filter(vertex => vertex >= 0 && vertex < maxCharacters)
-    val adjacentEdges = realAdjacentVertices.map(adj => Edge(currentVertex, adj, 0))
+    val adjacentEdges = realAdjacentVertices.map(adj => Edge(currentVertex, adj))
     adjacentEdges.filter(edge => {
-      inputChar(edge.dstId.toInt)._1 != 'E' && (
-      inputChar(edge.dstId.toInt)._1 <= inputChar(edge.srcId.toInt)._1 ||
-      inputChar(edge.dstId.toInt)._1.toInt == inputChar(edge.srcId.toInt)._1.toInt + 1 ||
-      (inputChar(edge.srcId.toInt)._1 == 'S' && (inputChar(edge.dstId.toInt)._1 == 'a' || inputChar(edge.dstId.toInt)._1 == 'b'))) ||
-      inputChar(edge.srcId.toInt)._1 == 'y' || inputChar(edge.srcId.toInt)._1 == 'z'
+      val sourceChar = verticesSeq(edge.sourceId.toInt).character
+      val destinationChar = verticesSeq(edge.destinationId.toInt).character
+      destinationChar != 'E' && (
+        destinationChar <= sourceChar ||
+          destinationChar.toInt == sourceChar.toInt + 1 ||
+          (sourceChar == 'S' && (destinationChar == 'a' || destinationChar == 'b'))
+        ) || sourceChar == 'y' || sourceChar == 'z'
     })
   }
 
-  val spark = SparkSession.builder.config("spark.master", "local").appName("Simple Application").getOrCreate()
+  val start = verticesSeq.filter(_.character == 'S').head.vertexId
+  val end = verticesSeq.filter(_.character == 'E').head.vertexId
 
-  import spark.implicits._
+  @tailrec
+  def journeyThroughGraph(verticesSeq: Seq[Vertex], currentVertices: Set[Int], distance: Int): Int = {
+    val newDistance = distance+1
+    val adjacentVertices = currentVertices.flatMap(currentVertex => edgesSeq.filter(_.sourceId == currentVertex).map(_.destinationId))
+    val newVertices = verticesSeq.map(vertex => if(adjacentVertices.contains(vertex.vertexId) && !vertex.isVisited) vertex.copy(isVisited=true, distance=newDistance) else vertex)
+    if (newVertices(end).isVisited) newDistance
+    else journeyThroughGraph(newVertices, adjacentVertices, newDistance)
+  }
 
-  val vertices: RDD[(VertexId, Char)] = spark.sparkContext.parallelize(verticesSeq)
+ println(journeyThroughGraph(verticesSeq, Set(start), 0))
 
-  val edges: RDD[Edge[Int]] = spark.sparkContext.parallelize(edgesSeq)
+  val possibleStarts = (0 until (maxCharacters/rowLength)).map(_*rowLength)
 
-  val graph = Graph(vertices, edges)
-
-  val shortestPathRunner = ShortestPaths.run(graph, Seq(end))
-
-  val shortestPath = shortestPathRunner
-    .vertices
-    .filter({case(vId, _) => vId == start})
-    .first
-    ._2
-    .get(end)
-
-  println(shortestPath)
-
-  spark.close()
+  println(journeyThroughGraph(verticesSeq, possibleStarts.toSet, 0))
 }
